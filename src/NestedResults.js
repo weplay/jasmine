@@ -38,11 +38,11 @@ jasmine.NestedResults.prototype.rollupCounts = function(result) {
 };
 
 /**
- * Tracks a result's message.
- * @param message
+ * Adds a log message.
+ * @param values Array of message parts which will be concatenated later.
  */
-jasmine.NestedResults.prototype.log = function(message) {
-  this.items_.push(new jasmine.MessageResult(message));
+jasmine.NestedResults.prototype.log = function(values) {
+  this.items_.push(new jasmine.MessageResult(values));
 };
 
 /**
@@ -57,7 +57,7 @@ jasmine.NestedResults.prototype.getItems = function() {
  * @param {jasmine.ExpectationResult|jasmine.NestedResults} result
  */
 jasmine.NestedResults.prototype.addResult = function(result) {
-  if (result.type != 'MessageResult') {
+  if (result.type != 'log') {
     if (result.items_) {
       this.rollupCounts(result);
     } else {

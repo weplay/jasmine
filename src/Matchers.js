@@ -15,25 +15,11 @@ jasmine.Matchers = function(env, actual, spec, opt_isNot) {
 // todo: @deprecated as of Jasmine 0.11, remove soon [xw]
 jasmine.Matchers.pp = function(str) {
   throw new Error("jasmine.Matchers.pp() is no longer supported, please use jasmine.pp() instead!");
-  this.report();
 };
 
-/** @deprecated Deprecated as of Jasmine 0.10. Rewrite your custom matchers to return true or false. */
+// todo: @deprecated Deprecated as of Jasmine 0.10. Rewrite your custom matchers to return true or false. [xw]
 jasmine.Matchers.prototype.report = function(result, failing_message, details) {
-  // todo: report a deprecation warning [xw]
-
-  if (this.isNot) {
-    throw new Error("As of jasmine 0.11, custom matchers must be implemented differently -- please see jasmine docs");
-  }
-  
-  this.reportWasCalled_ = true;
-  var expectationResult = new jasmine.ExpectationResult({
-    passed: result,
-    message: failing_message,
-    details: details
-  });
-  this.spec.addMatcherResult(expectationResult);
-  return result;
+  throw new Error("As of jasmine 0.11, custom matchers must be implemented differently -- please see jasmine docs");
 };
 
 jasmine.Matchers.wrapInto_ = function(prototype, matchersClass) {
@@ -176,12 +162,18 @@ jasmine.Matchers.prototype.toBeFalsy = function() {
   return !this.actual;
 };
 
+
+/** @deprecated Use expect(xxx).toHaveBeenCalled() instead */
+jasmine.Matchers.prototype.wasCalled = function() {
+  return this.toHaveBeenCalled();
+};
+
 /**
  * Matcher that checks to see if the actual, a Jasmine spy, was called.
  */
-jasmine.Matchers.prototype.wasCalled = function() {
+jasmine.Matchers.prototype.toHaveBeenCalled = function() {
   if (arguments.length > 0) {
-    throw new Error('wasCalled does not take arguments, use wasCalledWith');
+    throw new Error('toHaveBeenCalled does not take arguments, use toHaveBeenCalledWith');
   }
 
   if (!jasmine.isSpy(this.actual)) {
@@ -197,6 +189,8 @@ jasmine.Matchers.prototype.wasCalled = function() {
 
 /**
  * Matcher that checks to see if the actual, a Jasmine spy, was not called.
+ *
+ * @deprecated Use expect(xxx).not.toHaveBeenCalled() instead
  */
 jasmine.Matchers.prototype.wasNotCalled = function() {
   if (arguments.length > 0) {
@@ -214,13 +208,18 @@ jasmine.Matchers.prototype.wasNotCalled = function() {
   return !this.actual.wasCalled;
 };
 
+/** @deprecated Use expect(xxx).toHaveBeenCalledWith() instead */
+jasmine.Matchers.prototype.wasCalledWith = function() {
+  return this.toHaveBeenCalledWith.apply(this, arguments);
+};
+
 /**
  * Matcher that checks to see if the actual, a Jasmine spy, was called with a set of parameters.
  *
  * @example
  *
  */
-jasmine.Matchers.prototype.wasCalledWith = function() {
+jasmine.Matchers.prototype.toHaveBeenCalledWith = function() {
   var expectedArgs = jasmine.util.argsToArray(arguments);
   if (!jasmine.isSpy(this.actual)) {
     throw new Error('Expected a spy, but got ' + jasmine.pp(this.actual) + '.');
@@ -236,6 +235,7 @@ jasmine.Matchers.prototype.wasCalledWith = function() {
   return this.env.contains_(this.actual.argsForCall, expectedArgs);
 };
 
+/** @deprecated Use expect(xxx).not.toHaveBeenCalledWith() instead */
 jasmine.Matchers.prototype.wasNotCalledWith = function() {
   var expectedArgs = jasmine.util.argsToArray(arguments);
   if (!jasmine.isSpy(this.actual)) {

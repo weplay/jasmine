@@ -37,13 +37,13 @@ jasmine.Spec.prototype.results = function() {
   return this.results_;
 };
 
-jasmine.Spec.prototype.log = function(message) {
-  return this.results_.log(message);
-};
-
-/** @deprecated */
-jasmine.Spec.prototype.getResults = function() {
-  return this.results_;
+/**
+ * All parameters are pretty-printed and concatenated together, then written to the spec's output.
+ *
+ * Be careful not to leave calls to <code>jasmine.log</code> in production code.
+ */
+jasmine.Spec.prototype.log = function() {
+  return this.results_.log(arguments);
 };
 
 jasmine.Spec.prototype.runs = function (func) {
@@ -60,6 +60,9 @@ jasmine.Spec.prototype.addToQueue = function (block) {
   }
 };
 
+/**
+ * @param {jasmine.ExpectationResult} result
+ */
 jasmine.Spec.prototype.addMatcherResult = function(result) {
   this.results_.addResult(result);
 };
@@ -131,7 +134,8 @@ jasmine.Spec.prototype.execute = function(onComplete) {
     spec.finish(onComplete);
     return;
   }
-  this.env.reporter.log('>> Jasmine Running ' + this.suite.description + ' ' + this.description + '...');
+
+  this.env.reporter.reportSpecStarting(this);
 
   spec.env.currentSpec = spec;
 

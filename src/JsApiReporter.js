@@ -11,7 +11,7 @@ jasmine.JsApiReporter = function() {
 
 jasmine.JsApiReporter.prototype.reportRunnerStarting = function(runner) {
   this.started = true;
-  var suites = runner.suites();
+  var suites = runner.topLevelSuites();
   for (var i = 0; i < suites.length; i++) {
     var suite = suites[i];
     this.suites_.push(this.summarize_(suite));
@@ -30,10 +30,11 @@ jasmine.JsApiReporter.prototype.summarize_ = function(suiteOrSpec) {
     type: isSuite ? 'suite' : 'spec',
     children: []
   };
+  
   if (isSuite) {
-    var specs = suiteOrSpec.specs();
-    for (var i = 0; i < specs.length; i++) {
-      summary.children.push(this.summarize_(specs[i]));
+    var children = suiteOrSpec.children();
+    for (var i = 0; i < children.length; i++) {
+      summary.children.push(this.summarize_(children[i]));
     }
   }
   return summary;
@@ -79,11 +80,11 @@ jasmine.JsApiReporter.prototype.resultsForSpecs = function(specIds){
 
 jasmine.JsApiReporter.prototype.summarizeResult_ = function(result){
   var summaryMessages = [];
-  var messagesLength = result.messages.length
+  var messagesLength = result.messages.length;
   for (var messageIndex = 0; messageIndex < messagesLength; messageIndex++) {
     var resultMessage = result.messages[messageIndex];
     summaryMessages.push({
-      text: resultMessage.text,
+      text: resultMessage.type == 'log' ? resultMessage.toString() : jasmine.undefined,
       passed: resultMessage.passed ? resultMessage.passed() : true,
       type: resultMessage.type,
       message: resultMessage.message,
@@ -91,13 +92,11 @@ jasmine.JsApiReporter.prototype.summarizeResult_ = function(result){
         stack: resultMessage.passed && !resultMessage.passed() ? resultMessage.trace.stack : jasmine.undefined
       }
     });
-  };
+  }
 
-  var summaryResult = {
+  return {
     result : result.result,
     messages : summaryMessages
   };
-
-  return summaryResult;
 };
 

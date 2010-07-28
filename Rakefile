@@ -1,38 +1,35 @@
-require File.expand_path(File.join(File.dirname(__FILE__), "spec/jasmine_helper.rb"))
-
 def jasmine_sources
   sources  = ["src/base.js", "src/util.js", "src/Env.js", "src/Reporter.js", "src/Block.js"]
-  sources += Dir.glob('src/*.js').reject{|f| f == 'src/base.js' || sources.include?(f)}.sort
+  sources += Dir.glob('src/*.js').reject { |f| f == 'src/base.js' || sources.include?(f) }.sort
   sources
 end
 
-def jasmine_filename(version)
-  "jasmine-#{version['major']}.#{version['minor']}.#{version['build']}.js"
+def jasmine_html_sources
+  ["src/html/TrivialReporter.js"]
+end
+
+def jasmine_version
+  "#{version_hash['major']}.#{version_hash['minor']}.#{version_hash['build']}"
 end
 
 def version_hash
-  JSON.parse(File.new("src/version.json").read);
-end
-
-def start_jasmine_server(jasmine_includes = nil)
-  require File.expand_path(File.join(JasmineHelper.jasmine_root, "contrib/ruby/jasmine_spec_builder"))
-
-  puts "your tests are here:"
-  puts "  http://localhost:8888/run.html"
-
-  Jasmine::SimpleServer.start(
-    8888,
-    lambda { JasmineHelper.specs },
-    JasmineHelper.dir_mappings,
-    :jasmine_files => jasmine_includes)
+  require 'json'
+  @version ||= JSON.parse(File.new("src/version.json").read);
 end
 
 task :default => 'jasmine:dist'
 
+def substitute_jasmine_version(filename)
+  contents = File.read(filename)
+  contents = contents.gsub(/##JASMINE_VERSION##/, (jasmine_version))
+  contents = contents.gsub(/[^\n]*REMOVE_THIS_LINE_FROM_BUILD[^\n]*/, '')
+  File.open(filename, 'w') { |f| f.write(contents) }
+end
+
 namespace :jasmine do
 
   desc 'Prepares for distribution'
-  task :dist => ['jasmine:build', 'jasmine:doc']
+  task :dist => ['jasmine:build', 'jasmine:doc', 'jasmine:build_example_project', 'jasmine:fill_index_downloads']
 
   desc 'Check jasmine sources for coding problems'
   task :lint do
@@ -44,6 +41,11 @@ namespace :jasmine do
         undefineds = line.scan(/.?undefined/)
         if undefineds.include?(" undefined") || undefineds.include?("\tundefined")
           puts "Dangerous undefined at #{src}:#{i}:\n > #{line}"
+          passed = false
+        end
+
+        if line.scan(/window/).length > 0
+          puts "Dangerous window at #{src}:#{i}:\n > #{line}"
           passed = false
         end
       end
@@ -58,89 +60,117 @@ namespace :jasmine do
   desc 'Builds lib/jasmine from source'
   task :build => :lint do
     puts 'Building Jasmine from source'
-    require 'json'
 
     sources = jasmine_sources
     version = version_hash
 
     old_jasmine_files = Dir.glob('lib/jasmine*.js')
-    old_jasmine_files.each do |file|
-      File.delete(file)
-    end
+    old_jasmine_files.each { |file| File.delete(file) }
 
-    jasmine = File.new("lib/#{jasmine_filename version}", 'w')
+    File.open("lib/jasmine.js", 'w') do |jasmine|
+      sources.each do |source_filename|
+        jasmine.puts(File.read(source_filename))
+      end
 
-    sources.each do |source_filename|
-      jasmine.puts(File.read(source_filename))
-    end
-
-    jasmine.puts %{
+      jasmine.puts %{
 jasmine.version_= {
   "major": #{version['major']},
   "minor": #{version['minor']},
   "build": #{version['build']},
   "revision": #{Time.now.to_i}
-  };
+};
 }
+    end
 
-    jasmine.close
+    File.open("lib/jasmine-html.js", 'w') do |jasmine_html|
+      jasmine_html_sources.each do |source_filename|
+        jasmine_html.puts(File.read(source_filename))
+      end
+    end
+
+    FileUtils.cp("src/html/jasmine.css", "lib/jasmine.css")
+  end
+
+  task :need_pages_submodule do
+    unless File.exists?('pages/index.html')
+      raise "Jasmine pages submodule isn't present.  Run git submodule update --init"
+    end
   end
 
   desc "Build jasmine documentation"
-  task :doc do
+  task :doc => :need_pages_submodule do
     puts 'Creating Jasmine Documentation'
     require 'rubygems'
-    #sudo gem install ragaskar-jsdoc_helper
     require 'jsdoc_helper'
 
+    FileUtils.rm_r "pages/jsdoc", :force => true
 
     JsdocHelper::Rake::Task.new(:lambda_jsdoc) do |t|
-      t[:files] = jasmine_sources << 'lib/TrivialReporter.js'
+      t[:files] = jasmine_sources << jasmine_html_sources
       t[:options] = "-a"
+      t[:out] = "pages/jsdoc"
     end
     Rake::Task[:lambda_jsdoc].invoke
   end
 
+  desc "Build example project"
+  task :build_example_project => :need_pages_submodule do
+    require 'tmpdir'
 
-  task :server do
-    files = jasmine_sources + ['lib/TrivialReporter.js', 'lib/consolex.js']
-    jasmine_includes = lambda {
-      raw_jasmine_includes = files.collect { |f| File.expand_path(File.join(JasmineHelper.jasmine_root, f)) }
-      Jasmine.cachebust(raw_jasmine_includes).collect {|f| f.sub(JasmineHelper.jasmine_src_dir, "/src").sub(JasmineHelper.jasmine_lib_dir, "/lib") }
-    }
-    start_jasmine_server(jasmine_includes)
-  end
+    temp_dir = File.join(Dir.tmpdir, 'jasmine-standalone-project')
+    puts "Building Example Project in #{temp_dir}"
+    FileUtils.rm_r temp_dir if File.exists?(temp_dir)
+    Dir.mkdir(temp_dir)
 
-  task :server_build => 'jasmine:build' do
+    root = File.expand_path(File.dirname(__FILE__))
+    FileUtils.cp_r File.join(root, 'example/.'), File.join(temp_dir)
+    substitute_jasmine_version(File.join(temp_dir, "SpecRunner.html"))
 
-    start_jasmine_server
-  end
-
-  namespace :test do
-    task :ci => :'ci:local'
-    namespace :ci do
-
-      task :local => 'jasmine:build' do
-        require "spec"
-        require 'spec/rake/spectask'
-        Spec::Rake::SpecTask.new(:lambda_ci) do |t|
-          t.spec_opts = ["--color", "--format", "specdoc"]
-          t.spec_files = ["spec/jasmine_spec.rb"]
-        end
-        Rake::Task[:lambda_ci].invoke
-      end
-
-      task :saucelabs => ['jasmine:copy_saucelabs_config', 'jasmine:build'] do
-        ENV['SAUCELABS'] = 'true'
-        Rake::Task['jasmine:test:ci:local'].invoke
-      end
+    lib_dir = File.join(temp_dir, "lib/jasmine-#{jasmine_version}")
+    FileUtils.mkdir_p(lib_dir)
+    {
+        "lib/jasmine.js" => "jasmine.js",
+        "lib/jasmine-html.js" => "jasmine-html.js",
+        "src/html/jasmine.css" => "jasmine.css"
+    }.each_pair do |src, dest|
+      FileUtils.cp(File.join(root, src), File.join(lib_dir, dest))
     end
+
+    dist_dir = File.join(root, 'pages/downloads')
+    zip_file_name = File.join(dist_dir, "jasmine-standalone-#{jasmine_version}.zip")
+    puts "Zipping Example Project and moving to #{zip_file_name}"
+    FileUtils.mkdir(dist_dir) unless File.exist?(dist_dir)
+    if File.exist?(zip_file_name)
+      puts "WARNING!!! #{zip_file_name} already exists!"
+      FileUtils.rm(zip_file_name)
+    end
+    exec "cd #{temp_dir} && zip -r #{zip_file_name} . -x .[a-zA-Z0-9]*"
   end
 
-  desc 'Copy saucelabs.yml to work directory'
-  task 'copy_saucelabs_config' do
-    FileUtils.cp '../saucelabs.yml', 'spec'
+  task :fill_index_downloads do
+    require 'digest/sha1'
+
+    download_html = "<!-- START_DOWNLOADS -->\n"
+    download_html += "<table>\n<tr><th/><th>Version</th><th>Size</th><th>Date</th><th>SHA1</th></tr>\n"
+    Dir.glob('pages/downloads/*.zip').sort.reverse.each do |f|
+      sha1 = Digest::SHA1.hexdigest File.read(f)
+
+      fn = f.sub(/^pages\//, '')
+      version = /jasmine-standalone-(.*).zip/.match(f)[1]
+      download_html += "<td class=\"link\"><a href='#{fn}'>#{fn.sub(/downloads\//, '')}</a></td>\n"
+      download_html += "<td class=\"version\">#{version}</td>\n"
+      download_html += "<td class=\"size\">#{File.size(f) / 1024}k</td>\n"
+      download_html += "<td class=\"date\">#{File.mtime(f).strftime("%Y/%m/%d %H:%M:%S %Z")}</td>\n"
+      download_html += "<td class=\"sha\">#{sha1}</td>\n"
+    end
+    download_html += "</table>\n<!-- END_DOWNLOADS -->"
+
+    index_page = File.read('pages/index.html')
+    matcher = /<!-- START_DOWNLOADS -->.*<!-- END_DOWNLOADS -->/m
+    index_page = index_page.sub(matcher, download_html)
+    File.open('pages/index.html', 'w') {|f| f.write(index_page)}
+    puts "rewrote that file"
   end
 end
 
-task :jasmine => ['jasmine:server']
+task :jasmine => ['jasmine:dist']

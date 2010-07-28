@@ -861,7 +861,7 @@ describe("jasmine spec running", function () {
     expect(suiteResults.getItems()[2].getItems()[0].passed()).toEqual(true, "testAfterExecutesSafely 3rd suite spec should pass");
   });
 
-  it("testNestedDescribes", function() {
+  it("should permit nested describes", function() {
     var actions = [];
 
     env.beforeEach(function () {
@@ -949,6 +949,63 @@ describe("jasmine spec running", function () {
       "inner 2 afterEach",
       "outer afterEach",
       "runner afterEach"
+    ];
+    expect(actions).toEqual(expected);
+  });
+
+  it("should run multiple befores and afters in the order they are declared", function() {
+    var actions = [];
+
+    env.beforeEach(function () {
+      actions.push('runner beforeEach1');
+    });
+
+    env.afterEach(function () {
+      actions.push('runner afterEach1');
+    });
+
+    env.beforeEach(function () {
+      actions.push('runner beforeEach2');
+    });
+
+    env.afterEach(function () {
+      actions.push('runner afterEach2');
+    });
+
+    env.describe('Something', function() {
+      env.beforeEach(function() {
+        actions.push('beforeEach1');
+      });
+
+      env.afterEach(function() {
+        actions.push('afterEach1');
+      });
+
+      env.beforeEach(function() {
+        actions.push('beforeEach2');
+      });
+
+      env.afterEach(function() {
+        actions.push('afterEach2');
+      });
+
+      env.it('does it 1', function() {
+        actions.push('outer it 1');
+      });
+    });
+
+    env.execute();
+
+    var expected = [
+      "runner beforeEach1",
+      "runner beforeEach2",
+      "beforeEach1",
+      "beforeEach2",
+      "outer it 1",
+      "afterEach2",
+      "afterEach1",
+      "runner afterEach2",
+      "runner afterEach1"
     ];
     expect(actions).toEqual(expected);
   });
@@ -1061,7 +1118,7 @@ describe("jasmine spec running", function () {
 
     disabledSuite.execute();
 
-    expect(spy).wasNotCalled();
+    expect(spy).not.toHaveBeenCalled();
   });
 
   it('#explodes should throw an exception when it is called inside a spec', function() {
@@ -1081,6 +1138,58 @@ describe("jasmine spec running", function () {
     anotherSuite.execute();
 
     expect(exceptionMessage).toEqual('explodes function should not have been called');
+  });
+
+  it("should recover gracefully when there are errors in describe functions", function() {
+    var specs = [];
+    var superSimpleReporter = new jasmine.Reporter();
+    superSimpleReporter.reportSpecResults = function(spec) {
+      specs.push("Spec: " + spec.getFullName());
+      var results = spec.results().getItems();
+      for (var i = 0; i < results.length; i++) {
+        var result = results[i];
+        specs.push("Result: " + result);
+      }
+    };
+
+    try {
+      env.describe("outer1", function() {
+        env.describe("inner1", function() {
+          env.it("should thingy", function() {
+            this.expect(true).toEqual(true);
+          });
+
+          throw new Error("fake error");
+        });
+
+        env.describe("inner2", function() {
+          env.it("should other thingy", function() {
+            this.expect(true).toEqual(true);
+          });
+        });
+      });
+    } catch(e) {
+    }
+
+    env.describe("outer2", function() {
+      env.it("should xxx", function() {
+        this.expect(true).toEqual(true);
+      });
+    });
+
+    env.addReporter(superSimpleReporter);
+    env.execute();
+
+    expect(specs.join('')).toMatch(new RegExp(
+      'Spec: outer1 inner1 should thingy.' +
+      'Result: Passed.' +
+      'Spec: outer1 encountered a declaration exception.' +
+      'Result: Error: fake error.*' +
+      'Spec: outer1 inner2 should other thingy.' +
+      'Result: Passed.' +
+      'Spec: outer2 should xxx.' +
+      'Result: Passed.'
+    ));
   });
 
 });

@@ -26,6 +26,14 @@ jasmine.undefined = jasmine.___undefined___;
  */
 jasmine.DEFAULT_UPDATE_INTERVAL = 250;
 
+jasmine.getGlobal = function() {
+  function getGlobal() {
+    return this;
+  }
+
+  return getGlobal();
+};
+
 /**
  * Allows for bound functions to be compared.  Internal use only.
  *
@@ -42,33 +50,47 @@ jasmine.bindOriginal_ = function(base, name) {
     };
   } else {
     // IE support
-    return window[name];
+    return jasmine.getGlobal()[name];
   }
 };
 
-jasmine.setTimeout = jasmine.bindOriginal_(window, 'setTimeout');
-jasmine.clearTimeout = jasmine.bindOriginal_(window, 'clearTimeout');
-jasmine.setInterval = jasmine.bindOriginal_(window, 'setInterval');
-jasmine.clearInterval = jasmine.bindOriginal_(window, 'clearInterval');
+jasmine.setTimeout = jasmine.bindOriginal_(jasmine.getGlobal(), 'setTimeout');
+jasmine.clearTimeout = jasmine.bindOriginal_(jasmine.getGlobal(), 'clearTimeout');
+jasmine.setInterval = jasmine.bindOriginal_(jasmine.getGlobal(), 'setInterval');
+jasmine.clearInterval = jasmine.bindOriginal_(jasmine.getGlobal(), 'clearInterval');
 
-jasmine.MessageResult = function(text) {
-  this.type = 'MessageResult';
-  this.text = text;
+jasmine.MessageResult = function(values) {
+  this.type = 'log';
+  this.values = values;
   this.trace = new Error(); // todo: test better
 };
 
+jasmine.MessageResult.prototype.toString = function() {
+  var text = "";
+  for(var i = 0; i < this.values.length; i++) {
+    if (i > 0) text += " ";
+    if (jasmine.isString_(this.values[i])) {
+      text += this.values[i];
+    } else {
+      text += jasmine.pp(this.values[i]);
+    }
+  }
+  return text;
+};
+
 jasmine.ExpectationResult = function(params) {
-  this.type = 'ExpectationResult';
+  this.type = 'expect';
   this.matcherName = params.matcherName;
   this.passed_ = params.passed;
   this.expected = params.expected;
   this.actual = params.actual;
 
-  /** @deprecated */
-  this.details = params.details;
-
   this.message = this.passed_ ? 'Passed.' : params.message;
   this.trace = this.passed_ ? '' : new Error(this.message);
+};
+
+jasmine.ExpectationResult.prototype.toString = function () {
+  return this.message;
 };
 
 jasmine.ExpectationResult.prototype.passed = function () {
@@ -150,7 +172,7 @@ jasmine.isDomNode = function(obj) {
  *
  * @example
  * // don't care about which function is passed in, as long as it's a function
- * expect(mySpy).wasCalledWith(jasmine.any(Function));
+ * expect(mySpy).toHaveBeenCalledWith(jasmine.any(Function));
  *
  * @param {Class} clazz
  * @returns matchable object of the type clazz
@@ -165,7 +187,8 @@ jasmine.any = function(clazz) {
  * Spies should be created in test setup, before expectations.  They can then be checked, using the standard Jasmine
  * expectation syntax. Spies can be checked if they were called or not and what the calling params were.
  *
- * A Spy has the following mehtod: wasCalled, callCount, mostRecentCall, and argsForCall (see docs)
+ * A Spy has the following fields: wasCalled, callCount, mostRecentCall, and argsForCall (see docs).
+ *
  * Spies are torn down at the end of every spec.
  *
  * Note: Do <b>not</b> call new jasmine.Spy() directly - a spy must be created using spyOn, jasmine.createSpy or jasmine.createSpyObj.
@@ -195,8 +218,8 @@ jasmine.any = function(clazz) {
  *
  * // mock example
  * foo.not(7 == 7);
- * expect(foo.not).wasCalled();
- * expect(foo.not).wasCalledWith(true);
+ * expect(foo.not).toHaveBeenCalled();
+ * expect(foo.not).toHaveBeenCalledWith(true);
  *
  * @constructor
  * @see spyOn, jasmine.createSpy, jasmine.createSpyObj
@@ -387,8 +410,14 @@ jasmine.createSpyObj = function(baseName, methodNames) {
   return obj;
 };
 
-jasmine.log = function(message) {
-  jasmine.getEnv().currentSpec.log(message);
+/**
+ * All parameters are pretty-printed and concatenated together, then written to the current spec's output.
+ *
+ * Be careful not to leave calls to <code>jasmine.log</code> in production code.
+ */
+jasmine.log = function() {
+  var spec = jasmine.getEnv().currentSpec;
+  spec.log.apply(spec, arguments);
 };
 
 /**
@@ -551,28 +580,3 @@ jasmine.XmlHttpRequest = (typeof XMLHttpRequest == "undefined") ? function() {
   }
   throw new Error("This browser does not support XMLHttpRequest.");
 } : XMLHttpRequest;
-
-/**
- * Adds suite files to an HTML document so that they are executed, thus adding them to the current
- * Jasmine environment.
- *
- * @param {String} url path to the file to include
- * @param {Boolean} opt_global
- * @deprecated We suggest you use a different method of including JS source files. <code>jasmine.include</code> will be removed soon.
- */
-jasmine.include = function(url, opt_global) {
-  if (opt_global) {
-    document.write('<script type="text/javascript" src="' + url + '"></' + 'script>');
-  } else {
-    var xhr;
-    try {
-      xhr = new jasmine.XmlHttpRequest();
-      xhr.open("GET", url, false);
-      xhr.send(null);
-    } catch(e) {
-      throw new Error("couldn't fetch " + url + ": " + e);
-    }
-
-    return eval(xhr.responseText);
-  }
-};

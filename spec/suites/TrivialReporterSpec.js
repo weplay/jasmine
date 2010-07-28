@@ -1,9 +1,16 @@
 describe("TrivialReporter", function() {
+  var env;
   var trivialReporter;
   var body;
+  var fakeDocument;
 
   beforeEach(function() {
+    env = new jasmine.Env();
+    env.updateInterval = 0;
+
     body = document.createElement("body");
+    fakeDocument = { body: body, location: { search: "" } };
+    trivialReporter = new jasmine.TrivialReporter(fakeDocument);
   });
 
   function fakeSpec(name) {
@@ -29,16 +36,15 @@ describe("TrivialReporter", function() {
   }
 
   it("should run only specs beginning with spec parameter", function() {
-    var trivialReporter = new jasmine.TrivialReporter({ location: {search: "?spec=run%20this"} });
+    fakeDocument.location.search = "?spec=run%20this";
     expect(trivialReporter.specFilter(fakeSpec("run this"))).toBeTruthy();
     expect(trivialReporter.specFilter(fakeSpec("not the right spec"))).toBeFalsy();
     expect(trivialReporter.specFilter(fakeSpec("not run this"))).toBeFalsy();
   });
 
   it("should display empty divs for every suite when the runner is starting", function() {
-    var trivialReporter = new jasmine.TrivialReporter({ body: body });
     trivialReporter.reportRunnerStarting({
-      env: new jasmine.Env(),
+      env: env,
       suites: function() {
         return [ new jasmine.Suite({}, "suite 1", null, null) ];
       }
@@ -61,7 +67,6 @@ describe("TrivialReporter", function() {
 
     var runner, spec, fakeTimer;
     beforeEach(function () {
-      var env = new jasmine.Env();
       fakeTimer = new jasmine.FakeTimer();
       env.setTimeout = fakeTimer.setTimeout;
       env.clearTimeout = fakeTimer.clearTimeout;
@@ -72,7 +77,7 @@ describe("TrivialReporter", function() {
       runner.add(suite);
       spec = new jasmine.Spec(env, suite, 'some spec');
       suite.add(spec);
-      var trivialReporter = new jasmine.TrivialReporter({ body: body, location: {search: "?"} });
+      fakeDocument.location.search = "?";
       env.addReporter(trivialReporter);
     });
 
@@ -103,12 +108,10 @@ describe("TrivialReporter", function() {
         getItems: function() {
         }};
 
+      var suite1 = new jasmine.Suite(env, "suite 1", null, null);
+
       spec = {
-        suite: {
-          getFullName: function() {
-            return "suite 1";
-          }
-        },
+        suite: suite1,
         getFullName: function() {
           return "foo";
         },
@@ -117,11 +120,10 @@ describe("TrivialReporter", function() {
         }
       };
 
-      trivialReporter = new jasmine.TrivialReporter({ body: body });
       trivialReporter.reportRunnerStarting({
-        env: new jasmine.Env(),
+        env: env,
         suites: function() {
-          return [ new jasmine.Suite({}, "suite 1", null, null) ];
+          return [ suite1 ];
         }
       });
     });
@@ -130,7 +132,7 @@ describe("TrivialReporter", function() {
       expectationResult = new jasmine.ExpectationResult({
         matcherName: "toBeNull", passed: false, message: "Expected 'a' to be null, but it was not"
       });
-    
+
       spyOn(results, 'getItems').andReturn([expectationResult]);
 
       trivialReporter.reportSpecResults(spec);
@@ -155,4 +157,79 @@ describe("TrivialReporter", function() {
     });
   });
 
+  describe("log messages", function() {
+    it("should appear in the report", function() {
+      env.describe("suite", function() {
+        env.it("will have log messages", function() {
+          this.log("this is a", "multipart log message");
+        });
+      });
+
+      env.addReporter(trivialReporter);
+      env.execute();
+
+      var divs = body.getElementsByTagName("div");
+      var errorDiv = findElement(divs, 'resultMessage log');
+      expect(errorDiv.innerHTML).toEqual("this is a multipart log message");
+    });
+  });
+
+  describe("duplicate example names", function() {
+    it("should report failures correctly", function() {
+      var suite1 = env.describe("suite", function() {
+        env.it("will have log messages", function() {
+          this.log("this one fails!");
+          this.expect(true).toBeFalsy();
+        });
+      });
+
+      var suite2 = env.describe("suite", function() {
+        env.it("will have log messages", function() {
+          this.log("this one passes!");
+          this.expect(true).toBeTruthy();
+        });
+      });
+
+      env.addReporter(trivialReporter);
+      env.execute();
+
+      var divs = body.getElementsByTagName("div");
+      var passedSpecDiv = findElement(divs, 'suite passed');
+      expect(passedSpecDiv.className).toEqual('suite passed');
+      expect(passedSpecDiv.innerHTML).toContain("this one passes!");
+      expect(passedSpecDiv.innerHTML).not.toContain("this one fails!");
+
+      var failedSpecDiv = findElement(divs, 'suite failed');
+      expect(failedSpecDiv.className).toEqual('suite failed');
+      expect(failedSpecDiv.innerHTML).toContain("this one fails!");
+      expect(failedSpecDiv.innerHTML).not.toContain("this one passes!");
+    });
+  });
+
+  describe('#reportSpecStarting', function() {
+    var spec1;
+    beforeEach(function () {
+      env.describe("suite 1", function() {
+        spec1 = env.it("spec 1", function() {
+        });
+      });
+    });
+
+    it('DOES NOT log running specs by default', function() {
+      spyOn(trivialReporter, 'log');
+
+      trivialReporter.reportSpecStarting(spec1);
+
+      expect(trivialReporter.log).not.toHaveBeenCalled();
+    });
+
+    it('logs running specs when log_running_specs is true', function() {
+      trivialReporter.logRunningSpecs = true;
+      spyOn(trivialReporter, 'log');
+
+      trivialReporter.reportSpecStarting(spec1);
+
+      expect(trivialReporter.log).toHaveBeenCalledWith('>> Jasmine Running suite 1 spec 1...');
+    });
+  });
 });
