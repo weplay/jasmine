@@ -26,6 +26,14 @@ jasmine.undefined = jasmine.___undefined___;
  */
 jasmine.DEFAULT_UPDATE_INTERVAL = 250;
 
+jasmine.getGlobal = function() {
+  function getGlobal() {
+    return this;
+  }
+
+  return getGlobal();
+};
+
 /**
  * Default timeout interval in milliseconds for waitsFor() blocks.
  */

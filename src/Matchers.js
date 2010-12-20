@@ -215,6 +215,11 @@ jasmine.Matchers.prototype.wasNotCalled = function() {
   return !this.actual.wasCalled;
 };
 
+/** @deprecated Use expect(xxx).toHaveBeenCalledWith() instead */
+jasmine.Matchers.prototype.wasCalledWith = function() {
+  return this.toHaveBeenCalledWith.apply(this, arguments);
+};
+
 /**
  * Matcher that checks to see if the actual, a Jasmine spy, was called with a set of parameters.
  *
@@ -243,9 +248,6 @@ jasmine.Matchers.prototype.toHaveBeenCalledWith = function() {
 
   return this.env.contains_(this.actual.argsForCall, expectedArgs);
 };
-
-/** @deprecated Use expect(xxx).toHaveBeenCalledWith() instead */
-jasmine.Matchers.prototype.wasCalledWith = jasmine.Matchers.prototype.toHaveBeenCalledWith;
 
 /** @deprecated Use expect(xxx).not.toHaveBeenCalledWith() instead */
 jasmine.Matchers.prototype.wasNotCalledWith = function() {

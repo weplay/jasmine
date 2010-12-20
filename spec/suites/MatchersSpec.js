@@ -84,6 +84,13 @@ describe("jasmine.Matchers", function() {
     expect((match(nodeA).toEqual(nodeB))).toFail();
   });
 
+  it("toEqual with DOM nodes", function() {
+    var nodeA = document.createElement('div');
+    var nodeB = document.createElement('div');
+    expect((match(nodeA).toEqual(nodeA))).toEqual(true);
+    expect((match(nodeA).toEqual(nodeB))).toEqual(false);
+  });
+
   it("toEqual to build an Expectation Result", function() {
     var actual = 'a';
     var matcher = match(actual);
@@ -640,7 +647,6 @@ describe("jasmine.Matchers", function() {
         expect(TestClass.normalFunction).wasCalled();
       });
     });
-
 
     describe("wasNotCalled", function() {
       it("should pass iff the spy was not called", function() {
